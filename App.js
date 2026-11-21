@@ -1,117 +1,125 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, createContext, useContext } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
-  ActivityIndicator,
   ScrollView,
-  StatusBar,
   Alert,
 } from 'react-native';
 
-export default function App() {
+import {
+  PaperProvider,
+  MD3LightTheme,
+  Button,
+  Card,
+  ActivityIndicator,
+  IconButton,
+} from 'react-native-paper';
+
+import { NavigationContainer } from '@react-navigation/native';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+
+const Tab = createBottomTabNavigator();
+const FavoritosContext = createContext();
+const STORAGE_KEY = '@glowup_favoritos';
+
+const tema = {
+  ...MD3LightTheme,
+  colors: {
+    ...MD3LightTheme.colors,
+    primary: '#D96C91',
+    secondary: '#B84773',
+    background: '#FDF3F6',
+    surface: '#FFFFFF',
+  },
+};
+
+// TELA INÍCIO
+function Inicio() {
   const [frase, setFrase] = useState('');
   const [autor, setAutor] = useState('');
   const [carregando, setCarregando] = useState(false);
 
-  // Função que consome a API
-   
-const buscarFrase = async () => {
-  setCarregando(true);
+  const { favoritos, adicionarFavorito, pronto } =
+    useContext(FavoritosContext);
 
-  try {
-    // 1. Buscar uma frase na API DummyJSON
-    const resposta = await fetch(
-      'https://dummyjson.com/quotes/random'
-    );
+  const salvo = favoritos.some(
+    item => item.frase === frase && item.autor === autor
+  );
 
-    if (!resposta.ok) {
-      throw new Error('Erro ao buscar frase');
+  const buscarFrase = async () => {
+    setCarregando(true);
+
+    try {
+      const resposta = await fetch(
+        'https://dummyjson.com/quotes/random'
+      );
+
+      if (!resposta.ok) {
+        throw new Error('Erro ao buscar frase');
+      }
+
+      const dados = await resposta.json();
+
+      const urlTraducao =
+        'https://api.mymemory.translated.net/get?q=' +
+        encodeURIComponent(dados.quote) +
+        '&langpair=en|pt-BR';
+
+      const respostaTraducao = await fetch(urlTraducao);
+
+      if (!respostaTraducao.ok) {
+        throw new Error('Erro na tradução');
+      }
+
+      const traducao = await respostaTraducao.json();
+
+      if (
+        traducao.responseStatus !== 200 ||
+        !traducao.responseData?.translatedText
+      ) {
+        throw new Error('Tradução indisponível');
+      }
+
+      let texto = traducao.responseData.translatedText;
+
+      try {
+        texto = decodeURIComponent(texto);
+      } catch {
+        texto = texto.replace(/%20/g, ' ');
+      }
+
+      setFrase(texto);
+      setAutor(dados.author);
+
+    } catch (erro) {
+      Alert.alert(
+        'Ops! 💗',
+        'Não foi possível carregar a frase. Tente novamente.'
+      );
+    } finally {
+      setCarregando(false);
     }
+  };
 
-    const dados = await resposta.json();
-
-    // 2. Preparar o texto para tradução
-    const textoOriginal = dados.quote;
-
-    const urlTraducao =
-      'https://api.mymemory.translated.net/get' +
-      '?q=' + encodeURIComponent(textoOriginal) +
-      '&langpair=en|pt-BR';
-
-    // 3. Enviar a frase para a API de tradução
-    const respostaTraducao = await fetch(urlTraducao);
-
-    if (!respostaTraducao.ok) {
-      throw new Error('Erro na tradução');
-    }
-
-    const dadosTraducao = await respostaTraducao.json();
-
-    // 4. Verificar se a tradução foi realizada
-    if (
-      dadosTraducao.responseStatus !== 200 ||
-      !dadosTraducao.responseData?.translatedText
-    ) {
-      throw new Error('Tradução indisponível');
-    }
-
-    // 5. Exibir a frase traduzida
-     
-const fraseTraduzida = decodeURIComponent(
-  dadosTraducao.responseData.translatedText
-);
-
-setFrase(fraseTraduzida);
-
-
-    // 6. Manter o nome do autor
-    setAutor(dados.author);
-
-  } catch (erro) {
-    console.log('Erro:', erro);
-
-    Alert.alert(
-      'Ops! 💗',
-      'Não foi possível carregar a frase traduzida. Tente novamente.'
-    );
-
-  } finally {
-    setCarregando(false);
-  }
-};
-
-
-  // Busca uma frase quando o aplicativo abre
   useEffect(() => {
     buscarFrase();
   }, []);
 
   return (
-    <View style={styles.container}>
-      <StatusBar
-        barStyle="dark-content"
-        backgroundColor="#FFF5F8"
-      />
+    <ScrollView contentContainerStyle={styles.container}>
+      <Text style={styles.decoracao}>✿ ♡ ✿</Text>
+      <Text style={styles.logo}>GlowUp</Text>
+      <Text style={styles.subtitulo}>
+        Seu cantinho de inspiração 🌷
+      </Text>
 
-      <ScrollView
-        contentContainerStyle={styles.conteudo}
-      >
-        <Text style={styles.decoracao}>✿ ♡ ✿</Text>
-
-        <Text style={styles.logo}>
-          GlowUp
-        </Text>
-
-        <Text style={styles.subtitulo}>
-          Seu cantinho de inspiração 🌷
-        </Text>
-
-        <View style={styles.card}>
-          <Text style={styles.icone}>♡</Text>
-
+      <Card style={styles.card}>
+        <Card.Content>
+          <Text style={styles.coracao}>♡</Text>
           <Text style={styles.tituloCard}>
             Inspiração do dia
           </Text>
@@ -120,195 +128,471 @@ setFrase(fraseTraduzida);
 
           {carregando ? (
             <ActivityIndicator
-              size="large"
+              animating={true}
               color="#D96C91"
+              size="large"
+              style={{ marginVertical: 35 }}
             />
           ) : (
             <>
               <Text style={styles.frase}>
-                "{frase}"
+                {frase ? `"${frase}"` : 'Busque uma inspiração!'}
               </Text>
-
-              <Text style={styles.autor}>
-                — {autor}
-              </Text>
+              <Text style={styles.autor}>{autor}</Text>
             </>
           )}
-        </View>
+        </Card.Content>
+      </Card>
 
-        <TouchableOpacity
-          style={[
-            styles.botao,
-            carregando && styles.botaoDesativado,
-          ]}
-          onPress={buscarFrase}
-          disabled={carregando}
-        >
-          <Text style={styles.textoBotao}>
-            {carregando
-              ? 'Carregando...'
-              : '✦ Nova inspiração'}
-          </Text>
-        </TouchableOpacity>
+      <Button
+        mode="contained"
+        icon="creation"
+        style={styles.botao}
+        contentStyle={styles.conteudoBotao}
+        onPress={buscarFrase}
+        disabled={carregando}
+      >
+        Nova inspiração
+      </Button>
 
-        <View style={styles.mensagem}>
-          <Text style={styles.mensagemTitulo}>
+      <Button
+        mode="outlined"
+        icon={salvo ? 'heart' : 'heart-outline'}
+        style={styles.botaoFavorito}
+        disabled={!frase || carregando || salvo || !pronto}
+        onPress={() => adicionarFavorito(frase, autor)}
+      >
+        {salvo ? 'Salvo nos favoritos' : 'Salvar nos favoritos'}
+      </Button>
+
+      <Card style={styles.lembrete}>
+        <Card.Content>
+          <Text style={styles.tituloLembrete}>
             Um lembrete para você 💕
           </Text>
-
-          <Text style={styles.mensagemTexto}>
-            Reserve um momento do seu dia para
-            cuidar de si mesma e encontrar
-            inspiração nas pequenas coisas.
+          <Text style={styles.textoLembrete}>
+            Reserve um momento do seu dia para cuidar
+            de si mesma e encontrar inspiração nas
+            pequenas coisas.
           </Text>
-        </View>
+        </Card.Content>
+      </Card>
 
-        <Text style={styles.rodape}>
-          Feito com carinho ♡ GlowUp
-        </Text>
-      </ScrollView>
-    </View>
+      <Text style={styles.rodape}>
+        Feito com carinho ♡ GlowUp
+      </Text>
+    </ScrollView>
   );
 }
 
+// TELA FAVORITOS
+function Favoritos() {
+  const { favoritos, removerFavorito, pronto } =
+    useContext(FavoritosContext);
+
+  return (
+    <ScrollView contentContainerStyle={styles.container}>
+      <Text style={styles.decoracao}>♡ ♡ ♡</Text>
+      <Text style={styles.tituloTela}>
+        Meus favoritos
+      </Text>
+      <Text style={styles.subtitulo}>
+        Guarde aquilo que te inspira 💗
+      </Text>
+
+      {!pronto ? (
+        <ActivityIndicator color="#D96C91" />
+      ) : favoritos.length === 0 ? (
+        <Card style={styles.card}>
+          <Card.Content>
+            <Text style={styles.coracao}>♡</Text>
+            <Text style={styles.tituloCard}>
+              Nenhuma frase salva
+            </Text>
+            <Text style={styles.textoLembrete}>
+              Suas inspirações favoritas aparecerão aqui.
+            </Text>
+          </Card.Content>
+        </Card>
+      ) : (
+        favoritos.map(item => (
+          <Card key={item.id} style={styles.cardFavorito}>
+            <Card.Content>
+              <Text style={styles.fraseFavorita}>
+                "{item.frase}"
+              </Text>
+              <Text style={styles.autor}>
+                {item.autor}
+              </Text>
+              <IconButton
+                icon="heart-remove-outline"
+                iconColor="#D96C91"
+                style={{ alignSelf: 'flex-end' }}
+                accessibilityLabel="Remover dos favoritos"
+                onPress={() => removerFavorito(item.id)}
+              />
+            </Card.Content>
+          </Card>
+        ))
+      )}
+    </ScrollView>
+  );
+}
+
+// TELA SOBRE
+function Sobre() {
+  return (
+    <ScrollView contentContainerStyle={styles.container}>
+      <Text style={styles.decoracao}>✿ ♡ ✿</Text>
+      <Text style={styles.logo}>GlowUp</Text>
+      <Text style={styles.subtitulo}>
+        Versão 2.0
+      </Text>
+
+      <Card style={styles.card}>
+        <Card.Content>
+          <Text style={styles.tituloCard}>
+            Sobre o aplicativo
+          </Text>
+
+          <Text style={styles.textoSobre}>
+            O GlowUp é um aplicativo criado para promover
+            inspiração, motivação e autocuidado por meio
+            de frases inspiradoras traduzidas para português.
+          </Text>
+        </Card.Content>
+      </Card>
+
+      <Card style={styles.cardFavorito}>
+        <Card.Content>
+          <Text style={styles.tituloCard}>
+            Tecnologias utilizadas
+          </Text>
+
+          {[
+            'React Native',
+            'Expo',
+            'JavaScript',
+            'React Navigation',
+            'React Native Paper',
+            'AsyncStorage',
+            'API DummyJSON',
+            'API MyMemory',
+          ].map(tecnologia => (
+            <Text key={tecnologia} style={styles.tecnologia}>
+              ♡ {tecnologia}
+            </Text>
+          ))}
+        </Card.Content>
+      </Card>
+
+      <Card style={styles.lembrete}>
+        <Card.Content>
+          <Text style={styles.tituloLembrete}>
+            Projeto acadêmico
+          </Text>
+          <Text style={styles.textoLembrete}>
+            Desenvolvido por Victoria Larissa Soares
+          </Text>
+          <Text style={styles.textoLembrete}>
+            Análise e Desenvolvimento de Sistemas
+          </Text>
+          <Text style={styles.textoLembrete}>
+            Faculdade Senac Pernambuco
+          </Text>
+        </Card.Content>
+      </Card>
+    </ScrollView>
+  );
+}
+
+// APLICATIVO PRINCIPAL
+export default function App() {
+  const [favoritos, setFavoritos] = useState([]);
+  const [pronto, setPronto] = useState(false);
+
+  useEffect(() => {
+    const carregarFavoritos = async () => {
+      try {
+        const dados = await AsyncStorage.getItem(STORAGE_KEY);
+
+        if (dados) {
+          setFavoritos(JSON.parse(dados));
+        }
+
+        setPronto(true);
+      } catch (erro) {
+        Alert.alert('Erro', 'Não foi possível carregar os favoritos.');
+      }
+    };
+
+    carregarFavoritos();
+  }, []);
+
+  const adicionarFavorito = async (frase, autor) => {
+    const existe = favoritos.some(
+      item => item.frase === frase && item.autor === autor
+    );
+
+    if (existe) return;
+
+    const novos = [
+      ...favoritos,
+      {
+        id: Date.now().toString(),
+        frase,
+        autor,
+      },
+    ];
+
+    try {
+      await AsyncStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify(novos)
+      );
+
+      setFavoritos(novos);
+      Alert.alert('Salvo! 💗', 'Frase adicionada aos favoritos.');
+    } catch (erro) {
+      Alert.alert('Erro', 'Não foi possível salvar a frase.');
+    }
+  };
+
+  const removerFavorito = async id => {
+    const novos = favoritos.filter(item => item.id !== id);
+
+    try {
+      await AsyncStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify(novos)
+      );
+
+      setFavoritos(novos);
+    } catch (erro) {
+      Alert.alert('Erro', 'Não foi possível remover a frase.');
+    }
+  };
+
+  return (
+    <SafeAreaProvider>
+      <PaperProvider theme={tema}>
+        <FavoritosContext.Provider
+          value={{
+            favoritos,
+            adicionarFavorito,
+            removerFavorito,
+            pronto,
+          }}
+        >
+          <NavigationContainer>
+            <Tab.Navigator
+              screenOptions={{
+                headerStyle: {
+                  backgroundColor: '#FDF3F6',
+                },
+                headerShadowVisible: false,
+                headerTintColor: '#B84773',
+                tabBarActiveTintColor: '#D96C91',
+                tabBarInactiveTintColor: '#AD8492',
+                tabBarStyle: {
+                  backgroundColor: '#FFFFFF',
+                  borderTopColor: '#F5D5E0',
+                },
+              }}
+            >
+              <Tab.Screen
+                name="Início"
+                component={Inicio}
+                options={{
+                  tabBarIcon: ({ color }) => (
+                    <Text style={{ color, fontSize: 25 }}>⌂</Text>
+                  ),
+                }}
+              />
+
+              <Tab.Screen
+                name="Favoritos"
+                component={Favoritos}
+                options={{
+                  tabBarIcon: ({ color }) => (
+                    <Text style={{ color, fontSize: 25 }}>♡</Text>
+                  ),
+                }}
+              />
+
+              <Tab.Screen
+                name="Sobre"
+                component={Sobre}
+                options={{
+                  tabBarIcon: ({ color }) => (
+                    <Text style={{ color, fontSize: 25 }}>ⓘ</Text>
+                  ),
+                }}
+              />
+            </Tab.Navigator>
+          </NavigationContainer>
+        </FavoritosContext.Provider>
+      </PaperProvider>
+    </SafeAreaProvider>
+  );
+}
+
+// ESTILIZAÇÃO
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-    backgroundColor: '#FFF5F8',
-  },
-
-  conteudo: {
     flexGrow: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 25,
-    paddingTop: 60,
+    backgroundColor: '#FDF3F6',
+    padding: 24,
     paddingBottom: 35,
   },
 
   decoracao: {
-    fontSize: 25,
+    fontSize: 28,
     color: '#D96C91',
-    marginBottom: 10,
+    textAlign: 'center',
+    marginTop: 10,
   },
 
   logo: {
-    fontSize: 42,
-    fontWeight: 'bold',
-    color: '#C75B82',
-    letterSpacing: 1,
+    fontSize: 48,
+    fontWeight: '900',
+    color: '#C65380',
+    textAlign: 'center',
   },
 
   subtitulo: {
-    fontSize: 15,
-    color: '#A8788B',
-    marginTop: 8,
-    marginBottom: 35,
+    fontSize: 16,
+    color: '#AD7489',
     textAlign: 'center',
+    marginTop: 8,
+    marginBottom: 28,
   },
 
   card: {
     backgroundColor: '#FFFFFF',
-    width: '100%',
-    padding: 28,
-    borderRadius: 25,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 300,
-    elevation: 5,
-    shadowColor: '#D96C91',
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
+    borderRadius: 28,
+    paddingVertical: 25,
+    marginBottom: 22,
   },
 
-  icone: {
-    fontSize: 45,
+  coracao: {
+    fontSize: 55,
     color: '#D96C91',
-    marginBottom: 10,
+    textAlign: 'center',
   },
 
   tituloCard: {
-    fontSize: 21,
+    fontSize: 22,
     fontWeight: 'bold',
-    color: '#B84D75',
+    color: '#B84773',
     textAlign: 'center',
+    marginVertical: 12,
   },
 
   linha: {
-    width: 50,
-    height: 3,
-    backgroundColor: '#F5C6D6',
+    width: 55,
+    height: 4,
+    backgroundColor: '#F2BFD1',
     borderRadius: 10,
-    marginTop: 15,
-    marginBottom: 25,
+    alignSelf: 'center',
+    marginVertical: 15,
   },
 
   frase: {
-    fontSize: 19,
-    color: '#624D57',
+    fontSize: 21,
+    lineHeight: 31,
+    fontWeight: '600',
     textAlign: 'center',
-    lineHeight: 29,
-    marginBottom: 20,
+    color: '#604B55',
+    marginVertical: 15,
   },
 
   autor: {
-    fontSize: 14,
-    color: '#B77B92',
+    fontSize: 16,
     fontStyle: 'italic',
+    color: '#BF7894',
     textAlign: 'center',
+    marginVertical: 12,
   },
 
   botao: {
-    backgroundColor: '#D96C91',
-    paddingVertical: 18,
-    paddingHorizontal: 25,
-    borderRadius: 30,
-    marginTop: 30,
-    width: '100%',
-    alignItems: 'center',
-    elevation: 3,
+    borderRadius: 35,
+    marginBottom: 12,
   },
 
-  botaoDesativado: {
-    opacity: 0.6,
+  conteudoBotao: {
+    paddingVertical: 12,
   },
 
-  textoBotao: {
-    color: '#FFFFFF',
-    fontSize: 17,
+  botaoFavorito: {
+    borderRadius: 35,
+    borderColor: '#D96C91',
+    marginBottom: 25,
+    paddingVertical: 5,
+  },
+
+  lembrete: {
+    backgroundColor: '#FBE2EB',
+    borderRadius: 25,
+    marginVertical: 12,
+    paddingVertical: 15,
+  },
+
+  tituloLembrete: {
+    fontSize: 19,
     fontWeight: 'bold',
-  },
-
-  mensagem: {
-    backgroundColor: '#FCE4EC',
-    padding: 22,
-    borderRadius: 20,
-    width: '100%',
-    marginTop: 35,
-    alignItems: 'center',
-  },
-
-  mensagemTitulo: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#B84D75',
-    marginBottom: 10,
-  },
-
-  mensagemTexto: {
-    fontSize: 14,
-    color: '#8E6575',
     textAlign: 'center',
-    lineHeight: 22,
+    color: '#B84773',
+    marginBottom: 12,
+  },
+
+  textoLembrete: {
+    fontSize: 16,
+    lineHeight: 24,
+    textAlign: 'center',
+    color: '#906577',
   },
 
   rodape: {
-    fontSize: 12,
-    color: '#B98A9B',
-    marginTop: 35,
+    textAlign: 'center',
+    color: '#BF8B9F',
+    marginTop: 25,
+    fontSize: 14,
+  },
+
+  tituloTela: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#C65380',
+    textAlign: 'center',
+    marginTop: 10,
+  },
+
+  cardFavorito: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    marginBottom: 16,
+    paddingVertical: 10,
+  },
+
+  fraseFavorita: {
+    fontSize: 18,
+    lineHeight: 26,
+    color: '#604B55',
+    textAlign: 'center',
+  },
+
+  textoSobre: {
+    fontSize: 16,
+    lineHeight: 26,
+    color: '#906577',
+    textAlign: 'center',
+  },
+
+  tecnologia: {
+    fontSize: 16,
+    color: '#906577',
+    marginVertical: 7,
+    marginLeft: 10,
   },
 });
